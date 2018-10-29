@@ -7,11 +7,30 @@ import seaborn as sns
 from collections import Counter, defaultdict
 from scipy import stats
 from settings import *
-#%matplotlib inline
+#""%matplotlib inline
 plt.style.use('ggplot')
+plt.style.use('seaborn-deep')
 #%config InlineBackend.figure_format = 'retina'
 import warnings
 warnings.filterwarnings('ignore')
+
+central = [
+    "巨人",
+    "阪神",
+    "広島",
+    "中日",
+    "ヤクルト",
+    "ＤｅＮＡ",
+]
+
+pacific = [
+    "ソフトバンク",
+    "西武",
+    "ロッテ",
+    "日本ハム",
+    "楽天",
+    "オリックス",
+]
 
 
 def decode_count(count):
@@ -31,7 +50,7 @@ def decode_count(count):
             base_comment += str(i+1)
     return out_comment + base_comment + "塁"
 
-def bar_and_df(triple_transfer_list, ad_before, dis_before, after):
+def bar_and_df(triple_transfer_list, ad_before, dis_before, after, title="", show_df=True):
     ad = pd.DataFrame(sorted([[elem[0][0], elem[0][1], elem[0][2], elem[1]] for elem in list(Counter([elem for elem in triple_transfer_list if elem[0]==ad_before and elem[1]==after]).items())], key=lambda x: -x[-1]))
     dis = pd.DataFrame(sorted([[elem[0][0], elem[0][1], elem[0][2], elem[1]] for elem in list(Counter([elem for elem in triple_transfer_list if elem[0]==dis_before and elem[1]==after]).items())], key=lambda x: -x[-1]))
     ad[4] = ad[3] / sum(ad[3])
@@ -45,19 +64,19 @@ def bar_and_df(triple_transfer_list, ad_before, dis_before, after):
     plt.bar(np.array(list(range(len(con.dis_rate))))+0.35, con.dis_rate, tick_label=[decode_count(elem) for elem in con.index], width=0.35, align="center")
     plt.xticks(rotation=60, fontsize=20)
     plt.legend([decode_count(ad[0][0]), decode_count(dis[0][0])], fontsize=20)
-    #plt.title(decode_count(ad[1][0]) + "時の結果", fontsize=30)
-    plt.title(decode_count(ad_before)+"→"+decode_count(ad[1][0]) + "時の結果", fontsize=30)
+    plt.title(decode_count(ad[1][0]) + "時の結果" + "({})".format(title), fontsize=30)
     plt.xlabel("プレーの結果", fontsize=20)
     plt.ylabel("割合", fontsize=20)
     plt.show()
 
-    con = pd.concat([ad.set_index(2), dis.set_index(2)], axis=1, join="outer").fillna(0)[[3, 4]]
-    con.columns = ["ad_num", "dis_num", "ad_rate", "dis_rate"]
-    con["ad_num"] = con["ad_num"].astype(int)
-    con["dis_num"] = con["dis_num"].astype(int)
-    con["pvalue"] = [stats.ttest_ind(d1, d2).pvalue for d1, d2 in zip([[0] * (con["ad_num"].sum() - con["ad_num"][idx]) + [1] * con["ad_num"][idx] for idx in con.index], [[0] * (con["dis_num"].sum() - con["dis_num"][idx]) + [1] * con["dis_num"][idx] for idx in con.index])]
-    con.index = [decode_count(elem) for elem in con.index]
-    display(con.sort_values(by="pvalue"))
+    if show_df:
+        con = pd.concat([ad.set_index(2), dis.set_index(2)], axis=1, join="outer").fillna(0)[[3, 4]]
+        con.columns = ["ad_num", "dis_num", "ad_rate", "dis_rate"]
+        con["ad_num"] = con["ad_num"].astype(int)
+        con["dis_num"] = con["dis_num"].astype(int)
+        con["pvalue"] = [stats.ttest_ind(d1, d2).pvalue for d1, d2 in zip([[0] * (con["ad_num"].sum() - con["ad_num"][idx]) + [1] * con["ad_num"][idx] for idx in con.index], [[0] * (con["dis_num"].sum() - con["dis_num"][idx]) + [1] * con["dis_num"][idx] for idx in con.index])]
+        con.index = [decode_count(elem) for elem in con.index]
+        display(con.sort_values(by="pvalue"))
 
 def filename_to_datetime(filename):
     year = filename[:4]
@@ -104,7 +123,7 @@ def make_inning_list(event_df):
     inning_index = 1
 
     inning_list = []
-    for inning in range(10):
+    for inning in range(12):
         curr_inning_list = []
         for i in range(len(event_df)):
             if event_df.iloc[i, case_index] == "GAMESET":
@@ -137,7 +156,7 @@ def make_flattened_list(nested_list):
 def to_index(lst, dictionary):
     return [dictionary[elem] for elem in lst]
 
-def ks_test(event_df, kind, title=""):
+def ks_test(event_df, kind, title="", return_df=False):
     """
     kind : "statistic" or "pvalue"
     """
@@ -164,9 +183,25 @@ def ks_test(event_df, kind, title=""):
             elif kind == "pvalue":
                 df_ks.iloc[i, j] = stats.ks_2samp(inning_triple_index_list[i], inning_triple_index_list[j]).pvalue
 
-    plt.figure(figsize=(10, 5))
-    sns.heatmap(df_ks, cmap="Blues", annot=True)
-    plt.xlabel("イニング")
-    plt.ylabel("イニング")
-    plt.title(title+" "+str(df_ks.sum().sum()))
-    plt.show()
+    if return_df:
+        return df_ks
+    else:
+        plt.figure(figsize=(10, 5))
+        sns.heatmap(df_ks, cmap="Blues", annot=True)
+        plt.xlabel("イニング")
+        plt.ylabel("イニング")
+        plt.title(title+" "+str(df_ks.sum().sum()))
+        plt.show()
+
+def ks_statistics_distance(df_ks_1, df_ks_2):
+    return ((df_ks_1 - df_ks_2)**2).sum().sum() / sum(df_ks_1.shape)
+
+def similar_teams(target_team, team_ks_dict, central=central, pacific=pacific):
+    if target_team in central:
+        league = central
+    else:
+        league = pacific
+    res = []
+    for team in league:
+        res.append((ks_statistics_distance(team_ks_dict[team], team_ks_dict[target_team]), team))
+    return sorted(res)
