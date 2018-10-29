@@ -15,21 +15,21 @@ import warnings
 warnings.filterwarnings('ignore')
 
 central = [
-    "巨人",
-    "阪神",
     "広島",
-    "中日",
     "ヤクルト",
+    "巨人",
     "ＤｅＮＡ",
+    "中日",
+    "阪神",
 ]
 
 pacific = [
-    "ソフトバンク",
     "西武",
-    "ロッテ",
+    "ソフトバンク",
     "日本ハム",
-    "楽天",
     "オリックス",
+    "ロッテ",
+    "楽天",
 ]
 
 
@@ -205,3 +205,10 @@ def similar_teams(target_team, team_ks_dict, central=central, pacific=pacific):
     for team in league:
         res.append((ks_statistics_distance(team_ks_dict[team], team_ks_dict[target_team]), team))
     return sorted(res)
+
+def extract_case(event_df, before_2, before_1):
+    con_event_df = pd.concat([event_df, event_df[["状況"]].shift(1).rename({"状況": "状況-1"}, axis=1), event_df[["状況"]].shift(2).rename({"状況": "状況-2"}, axis=1)], axis=1)
+    return con_event_df[(con_event_df["状況-1"]==before_1) & (con_event_df["状況-2"]==before_2)]
+
+def make_triple_from_case(con_event_df):
+    return [list(reversed(elem)) for elem in con_event_df[["状況", "状況-1", "状況-2"]].values.tolist()]
