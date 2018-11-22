@@ -90,16 +90,16 @@ def make_df(start, end):
     offense_team_index = 6
     defense_team_index = 2
     event_list = []
-    file_list = os.listdir(DATA_DIR)[1:]
+    file_list = os.listdir(DETAIL_DATA_DIR)[1:]
 
     date_series = pd.Series(file_list).apply(filename_to_datetime)
     target_file_list = list(pd.Series(file_list)[(date_series<pd.to_datetime(end)+pd.offsets.timedelta(1)) & (date_series>=pd.to_datetime(start))])
 
-    columns = pd.read_csv(os.path.join(DATA_DIR, file_list[0]), encoding="cp932", index_col=0, dtype="object").columns
+    columns = pd.read_csv(os.path.join(DETAIL_DATA_DIR, file_list[0]), encoding="cp932", index_col=0, dtype="object").columns
     length = len(columns)
 
     for file in target_file_list:
-        curr_event_list = pd.read_csv(os.path.join(DATA_DIR, file), encoding="cp932", index_col=0, dtype="object").values.tolist()
+        curr_event_list = pd.read_csv(os.path.join(DETAIL_DATA_DIR, file), encoding="cp932", index_col=0, dtype="object").values.tolist()
         new_event_list = []
         for i in range(len(curr_event_list)):
             new_event_list.append(curr_event_list[i])
@@ -212,3 +212,40 @@ def extract_case(event_df, before_2, before_1):
 
 def make_triple_from_case(con_event_df):
     return [list(reversed(elem)) for elem in con_event_df[["状況", "状況-1", "状況-2"]].values.tolist()]
+
+name_dict = dict([(team, (lambda x: x[0] if x!="阪神" else x[1])(team)) for team in pacific+central])
+
+def make_score_df(team):
+    res = []
+    columns = ["相手", "得点", "安打", "失点", "被安打"]
+    files = os.listdir(SCORE_DATA_DIR)
+    for file in files:
+        score_df = pd.read_csv(os.path.join(SCORE_DATA_DIR, file), encoding="cp932", index_col=0)
+        if not name_dict[team] in score_df.index:
+            continue
+        opponent = score_df.index[0] if score_df.index[1] == name_dict[team] else score_df.index[1]
+        team_score = score_df.loc[name_dict[team], "計"]
+        team_hits = score_df.loc[name_dict[team], "安"]
+        opponent_score = score_df.loc[opponent, "計"]
+        opponent_hits = score_df.loc[opponent, "安"]
+        res.append([opponent, team_score, team_hits, opponent_score, opponent_hits])
+    df = pd.DataFrame(res, columns=columns)
+    df["得点率"] = df["得点"] / df["安打"]
+    df["失点率"] = df["失点"] / df["被安打"]
+    return df
+
+# エントロピーの計算
+# 観測データの１次元配列がインプット
+def entropy(data):
+    #epsilon = 1e-9
+    #all_case_list = ["".join(map(str, case)) for case in product([0, 1, 2, 3], [0, 1], [0, 1], [0, 1])]
+    count = pd.Series([tuple(elem) for elem in data]).value_counts()
+    prob = count / sum(count)
+    return - sum(prob * np.log(prob))
+
+def cond_entropy(target_data, given_data):
+    assert len(given_data.shape) == 2
+    combined_data = [(target_elem, tuple(given_elem)) for target_elem, given_elem in zip(target_data, given_data)]
+    combined_entropy = entropy(combined_data)
+    single_entropy = entropy(given_data)
+    return combined_entropy - single_entropy
