@@ -84,22 +84,31 @@ def filename_to_datetime(filename):
     day = filename[6:8]
     return pd.to_datetime(year+month+day)
 
-def make_df(start, end):
-    case_index = 0
-    inning_index = 1
-    offense_team_index = 6
-    defense_team_index = 2
+def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
+    if data_dir == DETAIL_DATA_DIR:
+        case_index = 0
+        inning_index = 1
+        offense_team_index = 6
+        defense_team_index = 2
+    elif data_dir == DETAIL_DATA_DIR_MLB:
+        case_index = 0
+        inning_index = 7
+        offense_team_index = 9
+        defense_team_index = 4
     event_list = []
-    file_list = os.listdir(DETAIL_DATA_DIR)[1:]
+    file_list = os.listdir(data_dir)[1:]
 
-    date_series = pd.Series(file_list).apply(filename_to_datetime)
-    target_file_list = list(pd.Series(file_list)[(date_series<pd.to_datetime(end)+pd.offsets.timedelta(1)) & (date_series>=pd.to_datetime(start))])
+    if start:
+        date_series = pd.Series(file_list).apply(filename_to_datetime)
+        target_file_list = list(pd.Series(file_list)[(date_series<pd.to_datetime(end)+pd.offsets.timedelta(1)) & (date_series>=pd.to_datetime(start))])
+    else:
+        target_file_list = file_list
 
-    columns = pd.read_csv(os.path.join(DETAIL_DATA_DIR, file_list[0]), encoding="cp932", index_col=0, dtype="object").columns
+    columns = pd.read_csv(os.path.join(data_dir, file_list[0]), encoding="cp932", index_col=0, dtype="object").columns
     length = len(columns)
 
     for file in target_file_list:
-        curr_event_list = pd.read_csv(os.path.join(DETAIL_DATA_DIR, file), encoding="cp932", index_col=0, dtype="object").values.tolist()
+        curr_event_list = pd.read_csv(os.path.join(data_dir, file), encoding="cp932", index_col=0, dtype="object").values.tolist()
         new_event_list = []
         for i in range(len(curr_event_list)):
             new_event_list.append(curr_event_list[i])
