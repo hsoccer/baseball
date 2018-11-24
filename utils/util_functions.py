@@ -85,24 +85,34 @@ def filename_to_datetime(filename):
     return pd.to_datetime(year+month+day)
 
 def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
+    event_list = []
+    file_list = os.listdir(data_dir)[1:]
+    
     if data_dir == DETAIL_DATA_DIR:
         case_index = 0
         inning_index = 1
         offense_team_index = 6
         defense_team_index = 2
+        if start:
+            date_series = pd.Series(file_list).apply(filename_to_datetime)
+            target_file_list = list(pd.Series(file_list)[(date_series<pd.to_datetime(end)+pd.offsets.timedelta(1)) & (date_series>=pd.to_datetime(start))])
+        else:
+            target_file_list = file_list
+        
     elif data_dir == DETAIL_DATA_DIR_MLB:
         case_index = 0
         inning_index = 7
         offense_team_index = 9
         defense_team_index = 4
-    event_list = []
-    file_list = os.listdir(data_dir)[1:]
-
-    if start:
-        date_series = pd.Series(file_list).apply(filename_to_datetime)
-        target_file_list = list(pd.Series(file_list)[(date_series<pd.to_datetime(end)+pd.offsets.timedelta(1)) & (date_series>=pd.to_datetime(start))])
-    else:
-        target_file_list = file_list
+        if start or end:
+            if not start:
+                start = 0
+            elif not end:
+                end = float("inf")
+            date_series = pd.Series(file_list).apply(lambda x: int(x.split(".")[0]))
+            target_file_list = list(pd.Series(file_list)[(date_series<end) & (date_series>=start)])
+        else:
+            target_file_list = file_list
 
     columns = pd.read_csv(os.path.join(data_dir, file_list[0]), encoding="cp932", index_col=0, dtype="object").columns
     length = len(columns)
@@ -115,6 +125,8 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
             if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "2" and curr_event_list[i+1][case_index][0] == "1":
                 new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
                 new_event_list.append(["0000", curr_event_list[i+1][inning_index]]+[np.nan for _ in range(length-2)])
+            if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "2" and curr_event_list[i+1][case_index][0] == "0":
+                new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
         event_list.extend(new_event_list+[["GAMESET"]+[np.nan for _ in range(length-1)]])
 
     for i in range(len(event_list)):
@@ -128,11 +140,15 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
     return pd.DataFrame(event_list, columns=columns)
 
 def make_inning_list(event_df):
-    case_index = 0
-    inning_index = 1
+    columns = list(event_df.columns)
+    case_index = columns.index("状況")
+    try:
+        inning_index = columns.index("イニング")
+    except:
+        inning_index = columns.index("回")
 
     inning_list = []
-    for inning in range(12):
+    for inning in range(18):
         curr_inning_list = []
         for i in range(len(event_df)):
             if event_df.iloc[i, case_index] == "GAMESET":
@@ -245,9 +261,8 @@ def make_score_df(team):
 
 # エントロピーの計算
 # 観測データの１次元配列がインプット
+# pyotlibの結果と完全に一致
 def entropy(data):
-    #epsilon = 1e-9
-    #all_case_list = ["".join(map(str, case)) for case in product([0, 1, 2, 3], [0, 1], [0, 1], [0, 1])]
     count = pd.Series([tuple(elem) for elem in data]).value_counts()
     prob = count / sum(count)
     return - sum(prob * np.log(prob))
@@ -258,3 +273,41 @@ def cond_entropy(target_data, given_data):
     combined_entropy = entropy(combined_data)
     single_entropy = entropy(given_data)
     return combined_entropy - single_entropy
+
+def is_improved(before, after):
+    if before[0] == after[0]:
+        if int(before[::-1][:-1]) <= int(after[::-1][:-1]):
+            return True
+    return False
+
+def make_score_df_mlb(team, year="both"):
+    num = 1944417
+    res = []
+    columns = ["相手", "得点", "失点"]
+    df = pd.read_csv(os.path.join(SCORE_DATA_DIR_MLB, "score_mlb.csv"), encoding="cp932", index_col=0)
+    if year == "both":
+        df_top = df[df["表チーム"]==team]
+        df_bot = df[df["裏チーム"]==team]
+    elif int(year) == 2018:
+        df_top = df[(df["表チーム"]==team) & (df["試合ID"].apply(lambda x: int(x.split(".")[0]))>num)]
+        df_bot = df[(df["裏チーム"]==team) & (df["試合ID"].apply(lambda x: int(x.split(".")[0]))>num)]
+    elif int(year) == 2017:
+        df_top = df[(df["表チーム"]==team) & (df["試合ID"].apply(lambda x: int(x.split(".")[0]))<=num)]
+        df_bot = df[(df["裏チーム"]==team) & (df["試合ID"].apply(lambda x: int(x.split(".")[0]))<=num)]
+    for elem in df_top.values:
+        res.append([elem[2], elem[3], elem[4]])
+    for elem in df_bot.values:
+        res.append([elem[1], elem[4], elem[3]])
+    return pd.DataFrame(res, columns=columns)
+
+def is_improved(before, after):
+    if before[0] == after[0]:
+        if int(before[::-1][:-1]) <= int(after[::-1][:-1]):
+            return True
+    return False
+
+def is_deteriorated(before, after):
+    if int(before[0]) < int(after):
+        if int(before[::-1][:-1]) >= int(after[::-1][:-1]):
+            return True
+    return False
