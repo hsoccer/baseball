@@ -139,13 +139,21 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
 
     return pd.DataFrame(event_list, columns=columns)
 
-def make_inning_list(event_df):
+def make_inning_list(event_df, score_start=None, score_end=None):
     columns = list(event_df.columns)
     case_index = columns.index("状況")
     try:
         inning_index = columns.index("イニング")
     except:
         inning_index = columns.index("回")
+    flag = type(score_start) == int or type(score_end) == int
+    if flag:
+        top_index = columns.index("表得点")
+        bot_index = columns.index("裏得点")
+        if not score_start:
+            score_start = 0
+        if not score_end:
+            score_end = float("inf")
 
     inning_list = []
     for inning in range(18):
@@ -154,7 +162,13 @@ def make_inning_list(event_df):
             if event_df.iloc[i, case_index] == "GAMESET":
                 continue
             if int(event_df.iloc[i, inning_index].split("回")[0]) == inning + 1:
-                curr_inning_list.append(event_df.iloc[i, case_index])
+                if flag:
+                    try:
+                        curr_inning_list.append((event_df.iloc[i, case_index], abs(int(event_df.iloc[i, top_index])-int(event_df.iloc[i, bot_index]))))
+                    except:
+                        curr_inning_list.append((event_df.iloc[i, case_index], np.nan))
+                else:
+                    curr_inning_list.append(event_df.iloc[i, case_index])
         inning_list.append(curr_inning_list)
     return inning_list
 
@@ -273,6 +287,14 @@ def cond_entropy(target_data, given_data):
     combined_entropy = entropy(combined_data)
     single_entropy = entropy(given_data)
     return combined_entropy - single_entropy
+
+def kl_divergence(data1, data2):
+    EPSILON = 1e-9
+    count1 = pd.Series([elem for elem in data1]).value_counts()
+    prob1 = count1 / sum(count1)
+    count2 = pd.Series([elem for elem in data2]).value_counts()
+    df = np.log(pd.concat([count1, count2], axis=1).fillna(EPSILON))
+    return sum((prob1 * (df[0] - df[1])).fillna(0))
 
 def is_improved(before, after):
     if before[0] == after[0]:
