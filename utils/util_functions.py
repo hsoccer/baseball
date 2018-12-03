@@ -104,6 +104,9 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
         inning_index = 7
         offense_team_index = 9
         defense_team_index = 4
+        bot_score_index = 5
+        top_score_index = 6
+        
         if start or end:
             if not start:
                 start = 0
@@ -121,11 +124,15 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
         curr_event_list = pd.read_csv(os.path.join(data_dir, file), encoding="cp932", index_col=0, dtype="object").values.tolist()
         new_event_list = []
         for i in range(len(curr_event_list)):
+            #if str(curr_event_list[i][inning_index]) == '7' and curr_event_list[i][offense_team_index] == "ブレーブス" and str(curr_event_list[i][bot_score_index]) == "2" and str(curr_event_list[i][case_index]) == "0000" and str(curr_event_list[i][1]) == "4":
+                #print(file)
             new_event_list.append(curr_event_list[i])
             if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "2" and curr_event_list[i+1][case_index][0] == "1":
                 new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
                 new_event_list.append(["0000", curr_event_list[i+1][inning_index]]+[np.nan for _ in range(length-2)])
             if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "2" and curr_event_list[i+1][case_index][0] == "0":
+                new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
+            if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "1" and curr_event_list[i+1][case_index][0] == "0":
                 new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
         event_list.extend(new_event_list+[["GAMESET"]+[np.nan for _ in range(length-1)]])
 
@@ -136,6 +143,28 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
                 event_list[i][inning_index] = event_list[i-1][inning_index]
                 event_list[i][offense_team_index] = event_list[i-1][offense_team_index]
                 event_list[i][defense_team_index] = event_list[i-1][defense_team_index]
+                
+    if data_dir == DETAIL_DATA_DIR_MLB:
+        new_bot_score_list = [event_list[0][bot_score_index]]
+        new_top_score_list = [event_list[0][bot_score_index]]
+        for i in range(1, len(event_list)-1):
+            if pd.isna(event_list[i][bot_score_index]):
+                #new_bot_score_list.append(np.nan)
+                #new_top_score_list.append(np.nan)
+                new_bot_score_list.append(event_list[i-1][bot_score_index])
+                new_top_score_list.append(event_list[i-1][top_score_index])
+            elif not pd.isna(event_list[i][bot_score_index]) and pd.isna(event_list[i-1][bot_score_index]):
+                new_bot_score_list.append(event_list[i][bot_score_index])
+                new_top_score_list.append(event_list[i][top_score_index])
+            elif not pd.isna(event_list[i][bot_score_index]) and not pd.isna(event_list[i-1][bot_score_index]):
+                new_bot_score_list.append(event_list[i-1][bot_score_index])
+                new_top_score_list.append(event_list[i-1][top_score_index])
+        new_bot_score_list.append(event_list[-1][bot_score_index])
+        new_top_score_list.append(event_list[-1][top_score_index])
+        df = pd.DataFrame(event_list, columns=columns)
+        df["裏得点"] = new_bot_score_list
+        df["表得点"] = new_top_score_list
+        return df
 
     return pd.DataFrame(event_list, columns=columns)
 
@@ -322,14 +351,26 @@ def make_score_df_mlb(team, year="both"):
         res.append([elem[1], elem[4], elem[3]])
     return pd.DataFrame(res, columns=columns)
 
-def is_improved(before, after):
-    if before[0] == after[0]:
-        if int(before[::-1][:-1]) <= int(after[::-1][:-1]):
-            return True
-    return False
+case_score = dict({'0000': 1, '0001': 17, '0010': 8, '0011': 23, '0100': 5, '0101': 22, '0110': 11, '0111': 25, '1000': 2, '1001': 18, '1010': 9, '1011': 21,'1100': 6, '1101': 19, '1110': 13, '1111': 24, '2000': 3, '2001': 12, '2010': 10, '2011': 16, '2100': 7, '2101': 15, '2110': 14, '2111': 20, '3000': 4, 'GAMESET': 0})
 
-def is_deteriorated(before, after):
-    if int(before[0]) < int(after):
-        if int(before[::-1][:-1]) >= int(after[::-1][:-1]):
+def is_improved(before, after, how="simple"):
+    if how == "simple":
+        if before[0] == after[0]:
+            if int(before[::-1][:-1]) <= int(after[::-1][:-1]):
+                return True
+        return False
+    if how == "score":
+        if case_score[before] < case_score[after]:
             return True
-    return False
+        return False
+
+def is_deteriorated(before, after, how="simple"):
+    if how == "simple":
+        if int(before[0]) < int(after):
+            if int(before[::-1][:-1]) >= int(after[::-1][:-1]):
+                return True
+        return False
+    if how == "score":
+        if case_score[before] > case_score[after]:
+            return True
+        return False
