@@ -383,6 +383,7 @@ case_score = dict({'0000': 1, '0001': 17, '0010': 8, '0011': 23, '0100': 5, '010
 def is_improved(before, after, how="simple"):
     if how == "simple":
         if before[0] == after[0]:
+            #if int(before[::-1][:-1]) < int(after[::-1][:-1]) or (after[1:] == "000" and before[1:]!="000"): #changed
             if int(before[::-1][:-1]) < int(after[::-1][:-1]) or after[1:] == "000":
                 return True
         return False
