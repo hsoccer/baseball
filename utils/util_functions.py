@@ -7,7 +7,7 @@ import seaborn as sns
 from collections import Counter, defaultdict
 from scipy import stats
 from settings import *
-#""%matplotlib inline
+#%matplotlib inline
 plt.style.use('ggplot')
 plt.style.use('seaborn-deep')
 #%config InlineBackend.figure_format = 'retina'
@@ -106,6 +106,7 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
         defense_team_index = 4
         bot_score_index = 5
         top_score_index = 6
+        top_bot_index = 8
         
         if start or end:
             if not start:
@@ -134,7 +135,8 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
                 new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
             if i < len(curr_event_list)-1 and curr_event_list[i][case_index][0] == "1" and curr_event_list[i+1][case_index][0] == "0":
                 new_event_list.append(["3000", curr_event_list[i][inning_index]]+[np.nan for _ in range(length-2)])
-        event_list.extend(new_event_list+[["GAMESET"]+[np.nan for _ in range(length-1)]])
+        #event_list.extend(new_event_list+[["GAMESET"]+[np.nan for _ in range(length-1)]])
+        event_list.extend(new_event_list+[["3000"]+[np.nan for _ in range(length-1)]])
 
     for i in range(len(event_list)):
         #print(event_list[i][inning_index])
@@ -142,25 +144,31 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
             if event_list[i][case_index] != "GAMESET":
                 event_list[i][inning_index] = event_list[i-1][inning_index]
                 event_list[i][offense_team_index] = event_list[i-1][offense_team_index]
-                event_list[i][defense_team_index] = event_list[i-1][defense_team_index]
+                #event_list[i][defense_team_index] = event_list[i-1][defense_team_index]
+                event_list[i][top_bot_index] = event_list[i-1][top_bot_index]
                 
     if data_dir == DETAIL_DATA_DIR_MLB:
         new_bot_score_list = [event_list[0][bot_score_index]]
         new_top_score_list = [event_list[0][bot_score_index]]
-        for i in range(1, len(event_list)-1):
+        for i in range(1, len(event_list)):
             if pd.isna(event_list[i][bot_score_index]):
                 #new_bot_score_list.append(np.nan)
                 #new_top_score_list.append(np.nan)
-                new_bot_score_list.append(event_list[i-1][bot_score_index])
-                new_top_score_list.append(event_list[i-1][top_score_index])
+                if not pd.isna(event_list[i-1][bot_score_index]):
+                    new_bot_score_list.append(event_list[i-1][bot_score_index])
+                    new_top_score_list.append(event_list[i-1][top_score_index])
+                else:
+                    new_bot_score_list.append(event_list[i-2][bot_score_index])
+                    new_top_score_list.append(event_list[i-2][top_score_index])
             elif not pd.isna(event_list[i][bot_score_index]) and pd.isna(event_list[i-1][bot_score_index]):
                 new_bot_score_list.append(event_list[i][bot_score_index])
                 new_top_score_list.append(event_list[i][top_score_index])
             elif not pd.isna(event_list[i][bot_score_index]) and not pd.isna(event_list[i-1][bot_score_index]):
                 new_bot_score_list.append(event_list[i-1][bot_score_index])
                 new_top_score_list.append(event_list[i-1][top_score_index])
-        new_bot_score_list.append(event_list[-1][bot_score_index])
-        new_top_score_list.append(event_list[-1][top_score_index])
+                
+        #new_bot_score_list.append(event_list[-1][bot_score_index])
+        #new_top_score_list.append(event_list[-1][top_score_index])
         df = pd.DataFrame(event_list, columns=columns)
         df["裏得点"] = new_bot_score_list
         df["表得点"] = new_top_score_list
@@ -168,7 +176,7 @@ def make_df(start=None, end=None, data_dir=DETAIL_DATA_DIR):
 
     return pd.DataFrame(event_list, columns=columns)
 
-def make_inning_list(event_df, score_start=None, score_end=None):
+def make_inning_list(event_df, score_start=None, score_end=None, how="diff"):
     columns = list(event_df.columns)
     case_index = columns.index("状況")
     try:
@@ -183,6 +191,7 @@ def make_inning_list(event_df, score_start=None, score_end=None):
             score_start = 0
         if not score_end:
             score_end = float("inf")
+        top_bot_index = columns.index("表裏")
 
     inning_list = []
     for inning in range(18):
@@ -192,10 +201,21 @@ def make_inning_list(event_df, score_start=None, score_end=None):
                 continue
             if int(event_df.iloc[i, inning_index].split("回")[0]) == inning + 1:
                 if flag:
-                    try:
+                    if how == "diff":
+                        #try:
                         curr_inning_list.append((event_df.iloc[i, case_index], abs(int(event_df.iloc[i, top_index])-int(event_df.iloc[i, bot_index]))))
-                    except:
-                        curr_inning_list.append((event_df.iloc[i, case_index], np.nan))
+                        #except:
+                            #curr_inning_list.append((event_df.iloc[i, case_index], np.nan))
+                    elif how == "own":
+                        if event_df.iloc[i, top_bot_index] == "裏":
+                            curr_inning_list.append((event_df.iloc[i, case_index], int(event_df.iloc[i, bot_index])))
+                        elif event_df.iloc[i, top_bot_index] == "表":
+                            curr_inning_list.append((event_df.iloc[i, case_index], int(event_df.iloc[i, top_index])))
+                    elif how == "both":
+                        if event_df.iloc[i, top_bot_index] == "裏":
+                            curr_inning_list.append((event_df.iloc[i, case_index], int(event_df.iloc[i, bot_index]), int(event_df.iloc[i, top_index])))
+                        elif event_df.iloc[i, top_bot_index] == "表":
+                            curr_inning_list.append((event_df.iloc[i, case_index], int(event_df.iloc[i, top_index]), int(event_df.iloc[i, bot_index])))
                 else:
                     curr_inning_list.append(event_df.iloc[i, case_index])
         inning_list.append(curr_inning_list)
@@ -209,7 +229,7 @@ def make_inning_triple(inning_list):
             before, curr, after = inning_list[inning][i-2], inning_list[inning][i-1], inning_list[inning][i]
             if "GAMESET" in [before, curr, after]:
                 continue
-            if before == "3000" or curr == "3000":
+            if "3000" in before or "3000" in curr:
                 continue
             curr_triple.append((before, curr, after))
         inning_triple_list.append(curr_triple)
@@ -356,7 +376,7 @@ case_score = dict({'0000': 1, '0001': 17, '0010': 8, '0011': 23, '0100': 5, '010
 def is_improved(before, after, how="simple"):
     if how == "simple":
         if before[0] == after[0]:
-            if int(before[::-1][:-1]) <= int(after[::-1][:-1]):
+            if int(before[::-1][:-1]) <= int(after[::-1][:-1]) or after[1:] == "000":
                 return True
         return False
     if how == "score":
@@ -366,7 +386,7 @@ def is_improved(before, after, how="simple"):
 
 def is_deteriorated(before, after, how="simple"):
     if how == "simple":
-        if int(before[0]) < int(after):
+        if int(before[0]) < int(after[0]):
             if int(before[::-1][:-1]) >= int(after[::-1][:-1]):
                 return True
         return False
