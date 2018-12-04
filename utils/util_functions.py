@@ -384,6 +384,7 @@ def is_improved(before, after, how="simple"):
     if how == "simple":
         if before[0] == after[0]:
             #if int(before[::-1][:-1]) < int(after[::-1][:-1]) or (after[1:] == "000" and before[1:]!="000"): #changed
+            #if int(before[::-1][:-1]) <= int(after[::-1][:-1]) or after[1:] == "000":
             if int(before[::-1][:-1]) < int(after[::-1][:-1]) or after[1:] == "000":
                 return True
         return False
@@ -435,7 +436,7 @@ event_df = pd.read_csv(os.path.join(ROOT_DIR, "event_df.csv"), index_col=0, enco
 df_2017 = pd.read_csv(os.path.join(ROOT_DIR, "df_2017.csv"), index_col=0, encoding="cp932", dtype=object)
 df_2018 = pd.read_csv(os.path.join(ROOT_DIR, "df_2018.csv"), index_col=0, encoding="cp932", dtype=object)
 
-def triple_on_score_diff(team, diff_lower, diff_upper, year="both"):
+def triple_on_score_diff(team, diff_lower, diff_upper, year="both", start_inning=1, end_inning=18):
     if year == "both":
         df = event_df[event_df.攻撃チーム==team]
     elif int(year) == 2018:
@@ -443,7 +444,7 @@ def triple_on_score_diff(team, diff_lower, diff_upper, year="both"):
     elif int(year) == 2017:
         df = df_2017[df_2017.攻撃チーム==team]
     triple = make_inning_triple(make_inning_list(df, score_end=1, how="both"))
-    lst = make_flattened_list(triple)
+    lst = make_flattened_list(triple[start_inning-1: end_inning])
     res = []
     for elem in lst:
         my_score = int(elem[1][1])
