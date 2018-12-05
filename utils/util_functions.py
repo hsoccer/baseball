@@ -423,6 +423,12 @@ def ranking(team, year=2018):
         if team in teams:
             return i + 1
         
+winning_rate_df = pd.read_csv(os.path.join(DATA_DIR, "winning_rate.csv"), index_col=0)
+        
+def winning_rate(team, year=2018):
+    # year = 2018 or 2017 or "mean"
+    return winning_rate_df[str(year)][team]
+        
 case_expected_score_dict = dict(pd.read_csv(os.path.join(DATA_DIR, "case_expected_score.csv"), dtype=object).values)
 case_expected_score_dict = dict([[key, float(value)] for key, value in case_expected_score_dict.items()])
 
@@ -432,9 +438,9 @@ def weighted_score(case, score):
     """
     return score / case_expected_score_dict[case]
 
-event_df = pd.read_csv(os.path.join(INTEGRATED_DIR, "event_df.csv"), index_col=0, encoding="cp932", dtype=object)
-df_2017 = pd.read_csv(os.path.join(INTEGRATED_DIR, "df_2017.csv"), index_col=0, encoding="cp932", dtype=object)
-df_2018 = pd.read_csv(os.path.join(INTEGRATED_DIR, "df_2018.csv"), index_col=0, encoding="cp932", dtype=object)
+event_df = pd.read_csv(os.path.join(INTEGRATED_DATA_DIR, "event_df.csv"), index_col=0, encoding="cp932", dtype=object)
+df_2017 = pd.read_csv(os.path.join(INTEGRATED_DATA_DIR, "df_2017.csv"), index_col=0, encoding="cp932", dtype=object)
+df_2018 = pd.read_csv(os.path.join(INTEGRATED_DATA_DIR, "df_2018.csv"), index_col=0, encoding="cp932", dtype=object)
 
 def triple_on_score_diff(team, diff_lower, diff_upper, year="both", start_inning=1, end_inning=18):
     if year == "both":
